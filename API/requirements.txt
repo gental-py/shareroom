@@ -1,0 +1,6 @@
+uvicorn
+websockets
+fastapi
+bcrypt
+uuid
+python-multipart

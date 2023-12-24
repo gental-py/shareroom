@@ -1,0 +1,144 @@
+.toaster,
+ol.rack {
+    list-style: none;
+    margin: 0
+}
+
+.toaster {
+    font-family: 'Cascadia Code';
+    box-sizing: border-box;
+    padding: 5px;
+    outline: 0;
+    z-index: 999999999;
+    position: fixed
+}
+
+.butteruptoast,
+.butteruptoast.brutalist {
+    font-size: 13px;
+    display: flex;
+    padding: 16px;
+    width: max-content;
+}
+
+.toaster.bottom-right {
+    bottom: 20px;
+    right: 20px
+}
+
+.toaster.bottom-right ol.rack {
+    flex-direction: column
+}
+
+ol.rack {
+    padding: 0;
+    display: flex
+}
+
+ol.rack li {
+    margin-bottom: 16px
+}
+
+.butteruptoast {
+    border-radius: 8px;
+    box-shadow: 0 4px 12px #0000001a;
+    align-items: center;
+    gap: 6px;
+    color: #282828
+}
+
+.butteruptoast.dismissable {
+    cursor: pointer
+}
+
+.notif .desc {
+    display: flex;
+    flex-direction: column;
+    gap: 2px
+}
+
+.notif .desc .title {
+    font-weight: 700;
+    font-size: 16px; 
+}
+.notif .desc .message {
+    font-weight: 400;
+}
+
+.butteruptoast.success {
+    background-color: #263730;
+    border: 1px solid #3a4742;
+}
+.butteruptoast.success > .notif > .desc > .title {
+    color: #58d77b;
+}
+
+.butteruptoast.error {
+    background-color: #3b2626;
+    border: 1px solid #4e3535;
+}
+.butteruptoast.error > .notif > .desc > .title {
+    color: rgb(250, 87, 87);
+}
+
+.butteruptoast.warning {
+    background-color: #393022;
+    border: 1px solid #4b3d2a;
+}
+.butteruptoast.warning>.notif>.desc>.title {
+    color: rgb(240, 187, 88);
+}
+
+.butteruptoast.info {
+    background-color: #1f2836;
+    border: 1px solid #303941;
+}
+.butteruptoast.info>.notif>.desc>.title {
+    color: rgb(90, 138, 243);
+}
+
+.toastUp {
+    animation: .5s ease-in-out forwards slideUp
+}
+
+.toastDown {
+    animation: .5s ease-in-out forwards slideDown
+}
+
+@keyframes slideDown {
+    0% {
+        opacity: 0;
+        transform: translateY(-100%)
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0)
+    }
+}
+
+@keyframes slideUp {
+    0% {
+        opacity: 0;
+        transform: translateY(100%)
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0)
+    }
+}
+
+.fadeOutToast {
+    animation: .3s ease-in-out forwards fadeOut
+}
+
+@keyframes fadeOut {
+    0% {
+        opacity: 1
+    }
+
+    100% {
+        opacity: 0
+    }
+}

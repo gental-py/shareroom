@@ -1,0 +1,333 @@
+.groups-container {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
+
+.left-group {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.middle-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.right-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.room-panel {
+    margin-bottom: 16px;
+    width: 300px;
+}
+
+.files-panel {
+    margin-bottom: 16px;
+    width: 700px;
+    height: 75%;
+}
+
+.users-panel {
+    height: 21%;
+}
+
+.account-panel {
+    margin-bottom: 16px;
+}
+
+.msg-panel {
+    width: 380px;
+    height: 700px;
+}
+
+.files-panel[dropstate="true"] {
+    transition: all 0.5s;
+    background-color: #3b3936;
+}
+
+[lock-state="true"] .lock-btn {
+    opacity: 25%;
+}
+[lock-state="true"] .lock-btn:hover {
+    background-color: #916b4b25;
+}
+
+[lock-state="false"] .unlock-btn {
+    opacity: 25%;
+}
+[lock-state="false"] .unlock-btn:hover {
+    background-color: #916b4b25;
+}
+
+[is-admin="false"] .lock-panel {
+    display: none;
+}
+
+.chatInputGroup {
+    position: relative;
+    display: flex;
+    flex-direction: row;
+    padding: 0px;
+    padding-left: -8px !important;
+    width: 100%;
+}
+
+.chatInputGroup > .inputGroup {
+    padding-left: 0px !important;
+    width: 100%;
+}
+
+#newMsgInput {
+    font-family: 'Cascadia Code';
+    font-size: 16px;
+    border: none;
+    border-radius: 4px;
+    color: var(--main-text);
+    background-color: transparent;
+    outline: 1px solid var(--secondary);
+    margin-bottom: -8px !important;
+    width: 100%;
+}
+
+#newMsgInput[state="invalid"] {
+    outline: 2px solid rgb(253, 134, 134);
+}
+
+#sendMsgBtn {
+    width: fit-content;
+    font-family: 'Cascadia Code';
+    font-size: 16px;
+    border: none;
+    border-radius: 4px;
+    color: var(--main-text);
+    background-color: #bb8a59;
+    outline: 1px solid var(--secondary);
+    margin-top: 8px;
+}
+
+#sendMsgBtn:hover {
+    cursor: pointer;
+}
+
+.msgContainer {
+    overflow-y: scroll;
+    outline: #d5b99c38 1px solid;
+    border-radius: 4px;
+    height: 81%;
+    margin-bottom: 8px;
+}
+
+.msg {
+    background-color: var(--inner-panel);
+    border-radius: 8px;
+    margin-bottom: 8px;
+}
+
+.msgAuthor {
+    color: var(--accent);
+    font-family: 'Poppins', sans-serif;
+    font-weight: 600;
+    margin-bottom: -8px;
+}
+
+.msgContent {
+    color: var(--primary);
+    font-family: 'Segoe UI', sans-serif;
+}
+
+.addFileContainer {
+    display: flex;
+    justify-content: center;
+}
+
+#fakeAddFileBtn {
+    display: none;
+}
+
+#actualAddFileBtn {
+    width: 50%;
+    height: 40px;
+    border: none;
+    border-radius: 6px;
+    color: var(--main-text);
+    background-color: #916b4b25;
+    margin-top: -8px;
+    outline: var(--secondary) 2px solid;
+    transition: background-color 0.25s;
+}
+
+#actualAddFileBtn:hover {
+    cursor: pointer;
+    background-color: var(--secondary);
+}
+
+.filesContainer {
+    display: flex;
+    flex-wrap: wrap;
+    height: 385px;
+    outline: #d5b99c38 1px solid;
+    margin-top: 8px;
+    border-radius: 6px;
+    overflow-y: scroll;
+}
+
+.file {
+    background-color: #312e2c;
+    height: fit-content;
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    transition: box-shadow 0.4s;
+    margin: 6px;
+    outline: #7c5d3f4d 1px solid;
+}
+
+.fileName {
+    background-color: #383634;
+    border-radius: 4px;
+    font-family: 'Cascadia Code';
+    color: var(--main-text);
+    text-align: center;
+    margin-bottom: 4px;
+}
+
+.fileField {
+    font-family: 'Cascadia Code';
+    color: #d5b99c;
+}
+
+.fileValue {
+    color: var(--main-text);
+}
+
+.fileActionGroup {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 0px;
+    margin: 0px;
+    margin-top: 8px;
+}
+
+.downloadFile {
+    width: 100%;
+    border: none;
+    border-radius: 4px;
+    background-color: var(--secondary);
+    border: 1px var(--secondary) solid;
+    font-family: 'Cascadia Code';
+}
+
+.downloadFile:hover {
+    cursor: pointer;
+}
+
+.removeFile {
+    border: none;
+    border-radius: 4px;
+    width: min-content;
+    border: var(--error) 2px solid;
+    background-color: #9d57572f;
+    transition: background-color 0.4s;
+    margin-left: 8px;
+}
+
+.removeFile > i {
+    color: var(--main-text);
+    padding-block: 0px;
+}
+
+.removeFile:hover {
+    cursor: pointer;
+    background-color: var(--error);
+}
+
+[is-admin="false"] .removeFile {
+    display: none;
+}
+
+
+.file:has(.downloadFile:hover) {
+    box-shadow: #bb8a592f 0px 6px 60px;
+}
+
+.usersContainer {
+    display: flex;
+    flex-wrap: wrap;
+    height: 70px;
+    outline: #d5b99c38 1px solid;
+    border-radius: 6px;
+    overflow-y: scroll;
+}
+
+.memberView {
+    background-color: var(--secondary);
+    border-radius: 4px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    margin: 4px;
+    transition: background-color 0.4s;
+}
+
+.member-admin-badge > i {
+    margin-right: -4px;
+    padding: 0px;
+    color: var(--main-text);
+    text-shadow: 0px 0px 10px #ffd900;
+}
+
+.memberName {
+    font-family: "Poppins", sans-serif;
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--main-text)
+}
+
+[is-admin="true"] .memberView:hover {
+    text-decoration: line-through;
+    cursor: not-allowed;
+    background-color: var(--error);
+}
+
+
+@media only screen and (max-width: 1600px) {
+    .groups-container {
+        justify-content: center;
+    }
+
+    .middle-group > * {
+        min-width: 300px;
+    }
+    
+    .usersContainer {
+        justify-content: center;
+        max-width: 50%;
+    }
+
+    .msg-panel {
+        width: max-content;
+        min-width: 300px
+    }
+}
+
+@media only screen and (max-width: 750px) {
+    .groups-container {
+        justify-content: center;
+    }
+
+    .middle-group > * {
+        max-width: 300px;
+    }
+    
+    .middle-group {
+        justify-content: center;
+        max-width: 300px;
+    }
+}

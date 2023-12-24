@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="assets/icon.ico">
+    <link rel="stylesheet" href="assets/root-style.css">
+    <link rel="stylesheet" href="assets/login-style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,200;1,300&family=Staatliches&display=swap" rel="stylesheet">
+    <link rel="stylesheet" type="text/css" href="assets/butterup/butterup.min.css" />
+    <script src="https://kit.fontawesome.com/e526ea242b.js" crossorigin="anonymous"></script>
+    <script src="assets/butterup/butterup.min.js"></script>
+    <title>ShareRoom: Login</title>
+</head>
+<body>
+    <div class="header">
+        <h1 id="title"><span id="thin">Share</span> Room</h1>
+    </div>
+
+    <div class="main">
+        <div class="cardContainer">
+            <div class="card" id="loginCard">
+                <h1 class="title"><i class="fa-solid fa-user fa-xs"></i>Login</h1>
+                <form name="login_form" onsubmit="return false;">
+                    <div class="inputGroup">
+                        <input id="login-username" type="text" required state="none" oninput="LoginForm.validateUsername()">
+                        <label class="inputLabel">Username</label>
+                    </div>
+                    <div class="inputGroup">
+                        <input id="login-password" type="password" required state="none" oninput="LoginForm.validatePassword()">
+                        <label class="inputLabel">Password</label>
+                    </div>
+                    <div class="inputGroup">
+                        <button class="form-submit" onclick="LoginForm.sendRequest(event);return false;">login</button>
+                    </div>
+                </form>
+            </div>    
+            
+            <h1 id="split">OR</h1>
+
+            <div class="card" id="registerCard">
+                <h1 class="title"><i class="fa-solid fa-user-plus fa-xs"></i>Register</h1>
+                <form name="register_form" onsubmit="return false;">
+                    <div class="inputGroup">
+                        <input id="register-username" type="text" required state="none" oninput="RegisterForm.validateUsername()">
+                        <label class="inputLabel">Username</label>
+                    </div>
+                    <div class="inputGroup">
+                        <input id="register-password-main" type="password" required state="none" oninput="RegisterForm.validateMainPassword()">
+                        <label class="inputLabel">Password</label>
+                    </div>
+                    <div class="inputGroup">
+                        <input id="register-password-second" type="password" required state="none" oninput="RegisterForm.validateBothPasswords()">
+                        <label class="inputLabel">Repeat Password</label>
+                    </div>
+                    <div class="inputGroup">
+                        <button class="form-submit" onclick="RegisterForm.sendRequest(event)">register</button>
+                    </div>
+                </form>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="assets/script.js"></script>
+</body>
+</html>

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="assets/icon.ico">
+    <link rel="stylesheet" href="assets/root-style.css">
+    <link rel="stylesheet" href="assets/dashboard-style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,200;1,300&family=Staatliches&display=swap" rel="stylesheet">
+    <link rel="stylesheet" type="text/css" href="assets/butterup/butterup.min.css" />
+    <script src="https://kit.fontawesome.com/e526ea242b.js" crossorigin="anonymous"></script>
+    <script src="assets/butterup/butterup.min.js"></script>
+    <title>ShareRoom: Dashboard</title>
+</head>
+<body>
+    <div class="header">
+        <h1 id="title"><span id="thin">Share</span> Room</h1>
+    </div>
+
+    <div class="panels">
+        <div class="leftGroup">
+            <div class="card" id="account-panel">
+                <h1 class="title"><i class="fa-solid fa-user fa-xs"></i>Account</h1>
+                <span class="field-title">Username: </span> <span class="field-value" id="username"></span><br>
+                <span class="field-title">Joined: </span> <span class="field-value" id="joined_at"></span><br>
+                <form>
+                    <div class="inputGroup">
+                        <button class="form-submit" onclick="LogoutForm.sendRequest(event)">Logout</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="card" id="chpwd-panel">
+                <h1 class="title"><i class="fa-solid fa-key fa-xs"></i>Change password</h1>
+
+                <form onsubmit="return false">
+                    <div class="inputGroup">
+                        <input id="chpwd-current" type="password" required state="none" oninput="ChpwdForm.validateCurrentPassword()">
+                        <label class="inputLabel">Current password</label>
+                    </div>
+                    <div class="inputGroup">
+                        <input id="chpwd-new-main" type="password" required state="none" oninput="ChpwdForm.validateNewMainPassword()">
+                        <label class="inputLabel">New password</label>
+                    </div>
+
+                    <div class="inputGroup">
+                        <button class="form-submit" onclick="ChpwdForm.sendRequest(event)">Change</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="card" id="deleteaccount-panel">
+                <h1 class="title"><i class="fa-solid fa-trash fa-xs"></i>Delete account</h1>
+
+                <form>
+                    <div class="inputGroup">
+                        <input id="deleteaccount-pwd" type="password" required state="none" oninput="DeleteAccountForm.validatePassword()">
+                        <label class="inputLabel">Password</label>
+                    </div>
+                    <div class="delete-account-container">
+                        <button class="form-submit danger-btn" onclick="DeleteAccountForm.sendRequest(event)">Delete account</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="rightGroup">
+            <div class="card" id="activerooms-panel">
+                <h1 class="title"><i class="fa-solid fa-house fa-xs"></i>Active rooms</h1>
+                <div class="active-rooms-container"></div>
+            </div>
+
+            <div class="bottomGroup">
+                <div class="card" id="joinroom-panel">
+                    <h1 class="title"><i class="fa-solid fa-house-user fa-xs"></i>Join room</h1>
+                    <form id="join_room_form" onsubmit="return false">
+                        <div class="inputGroup">
+                            <input id="joinroom-code" type="text" required state="none" oninput="JoinRoomForm.validateCode()">
+                            <label class="inputLabel">Code</label>
+                        </div>
+                        <div class="inputGroup">
+                            <input id="joinroom-pwd" required type="password" state="none">
+                            <label class="inputLabel">Password <span class="not-required">(not required)</span></label>
+                        </div>
+
+                        <div class="rangeInputGroup" style="opacity: 0%; z-index: -1000;">
+                            <label class="rangeInputLabel"></label>
+                            <input type="range">
+                        </div>
+
+                        <div class="inputGroup">
+                            <button class="form-submit" onclick="JoinRoomForm.sendRequest(event)">Join</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="card" id="createroom-panel">
+                    <h1 class="title"><i class="fa-solid fa-house-medical fa-xs"></i>Create room</h1>
+                    <form id="create_room_form" onsubmit="return false">
+                        <div class="inputGroup">
+                            <input id="createroom-name" type="text" required state="none" oninput="CreateRoomForm.validateName()">
+                            <label class="inputLabel">Name</label>
+                        </div>
+                        <div class="inputGroup">
+                            <input id="createroom-pwd" type="password" required state="none">
+                            <label class="inputLabel">Password <span class="not-required">(not required)</span></label>
+                        </div>
+                        <div class="rangeInputGroup">
+                            <label class="rangeInputLabel">Max users: <span id="createroom-maxusers-amount">3</span></label>
+                            <input id="createroom-maxusers" type="range" min="2" max="5" value="3" oninput="updateMaxUsersAmount()">
+                            <script>
+                                function updateMaxUsersAmount() {
+                                    let amount = document.getElementById("createroom-maxusers").value
+                                    document.getElementById("createroom-maxusers-amount").innerHTML = amount
+                                }
+                            </script>
+                        </div>
+
+                        <div class="inputGroup">
+                            <button class="form-submit" onclick="CreateRoomForm.sendRequest(event)">Create</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="assets/script.js"></script>
+    <script>
+        if (getSavedDbKey() === null || getSavedDbKey() === '') {
+            redirectToLogin()
+        }
+        
+        setupNotificationWS()
+        loadUserData()
+    </script>
+</body>
+</html>

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="assets/icon.ico">
+    <link rel="stylesheet" href="assets/root-style.css">
+    <link rel="stylesheet" href="assets/room-style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,200;1,300&family=Staatliches&display=swap" rel="stylesheet">
+    <link rel="stylesheet" type="text/css" href="assets/butterup/butterup.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script src="assets/butterup/butterup.min.js"></script>
+    <script src="https://kit.fontawesome.com/e526ea242b.js" crossorigin="anonymous"></script>
+    <script src="assets/jszip.min.js"></script>
+    <title>ShareRoom: Room</title>
+</head>
+<body is-admin="false" lock-state="false">
+    <div class="header">
+        <h1 id="title"><span id="thin">Share</span> Room</h1>
+    </div>
+
+    <div class="groups-container">
+        <div class="left-group">
+            <div class="card room-panel">
+                <h1 class="title"><i class="fa-solid fa-house fa-xs"></i>Room</h1>
+                <span class="field-title">Name: </span> <span class="field-value" id="room-name"></span><br>
+                <span class="field-title">Code: </span> <span class="field-value" id="room-code"></span><br>
+                <span class="field-title">Creator: </span> <span class="field-value" id="room-creator"></span><br>
+                <span class="field-title">Created at: </span> <span class="field-value" id="room-created-at"></span><br>
+                <span class="field-title">Remove at: </span> <span class="field-value" id="room-remove-at"></span><br>
+                <span class="field-title">Has password: </span> <span class="field-value" id="room-is-pwd"></span><br>
+                <span class="field-title">Is locked: </span> <span class="field-value" id="room-is-locked"></span><br>
+                <span class="field-title">Members: </span> <span class="field-value" id="membersAmount">0/5</span><br>
+            
+                <div class="inputGroup">
+                    <button class="form-submit" onclick="redirectToDashboard()">Back to dashboard</button>
+                </div>
+                <div class="inputGroup">
+                    <button class="form-submit danger-btn" id="leave-room" onclick="sendLeaveRoomRequest()">Leave room</button>
+                </div>
+            </div>
+            
+            <div class="card account-panel">
+                <h1 class="title"><i class="fa-solid fa-user fa-xs"></i>Account</h1>
+                <span class="field-title">Username: </span> <span class="field-value" id="username"></span><br>
+                <div class="inputGroup">
+                    <button class="form-submit" onclick="LogoutForm.sendRequest()">Logout</button>
+                </div>
+            </div>
+
+            <div class="card lock-panel">
+                <h1 class="title"><i class="fa-solid fa-lock fa-xs"></i>Lock room</h1>
+                <span class="field-title">Allows new members to join</span>
+                <div class="inputGroup">
+                    <button class="form-submit unlock-btn" onclick="sendLockStateRequest(0)" style="margin-right: 16px;">Unlock</button>
+                    <button class="form-submit lock-btn" onclick="sendLockStateRequest(1)">Lock</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="middle-group">
+            <div class="card files-panel" id="filesPanel" dropstate="false">
+                <h1 class="title"><i class="fa-solid fa-box-archive fa-xs"></i>Files</h1>
+                <div class="addFileContainer">
+                    <input type="file" id="fakeAddFileBtn">
+                    <button class="form-submit" id="actualAddFileBtn">Upload file</button>
+                </div>
+                <div class="filesContainer"></div>
+            </div>
+    
+            <div class="card users-panel">
+                <h1 class="title"><i class="fa-solid fa-users fa-xs"></i>Members</h1>
+                <div class="usersContainer"></div>
+            </div>
+        </div>
+
+        <div class="right-group">
+            <div class="card msg-panel">
+                <h1 class="title"><i class="fa-solid fa-message fa-xs"></i>Chat</h1>
+                <div class="msgContainer"></div>
+                <div class="chatInputGroup">
+                    <div class="inputGroup">
+                        <input id="newMsgInput" required type="text" state="none" oninput="SendMessageForm.validateContent()">
+                        <label class="inputLabel">Message</label>
+                    </div>
+                    <button class="form-submit" id="sendMsgBtn" onclick="SendMessageForm.sendRequest()"><i class="fa-solid fa-paper-plane fa-xs"></i></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="assets/script.js"></script>
+    <script>
+        if (getSavedDbKey() === null || getSavedDbKey() === '') {
+            redirectToLogin()
+        }
+
+        document.getElementById("newMsgInput")
+                .addEventListener("keyup", function (event) {
+                    event.preventDefault();
+                    if (event.keyCode === 13) {
+                        document.getElementById("sendMsgBtn").click();
+                    }
+                });
+
+        document.getElementById("username").innerHTML = getSavedUsername()
+        connectWithRoom()
+        scrollToMessagesBottom()
+        setupFilesDrop()
+    </script>
+</body>
+</html>
