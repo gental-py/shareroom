@@ -5,6 +5,8 @@ const STORAGE_SESSION_ID = "sr-session-id"
 const ROOM_CODE = window.location.hash.substring(1)
 let IS_ROOM_ADMIN = false
 let notification_buffer = []
+let pending_friend_requests = []
+let friends_list = []
 
 function handleApiError(result) {
     console.error("API ERROR: " + result.err_msg)
@@ -335,6 +337,22 @@ function setRoomNotificationState(code, state) {
     }
 }
 
+function appendFriendRequest(request_id, uesrname, date_sent) {
+    // TODO: ...
+}
+
+function removeFriendRequest(request_id) {
+    // TODO: ...
+}
+
+function appendFriendToList(username) {
+    // TODO: ...
+}
+
+function removeFriendFromList(username) {
+    // TODO: ...
+}
+
 
 // Setups
 
@@ -472,6 +490,17 @@ function loadUserData() {
                             setRoomNotificationState(room_code, true)
                         }
                     }
+                    
+                    result.data.friends.forEach(
+                        friend_name => {
+                            appendFriendToList(friend_name)
+                        }
+                    )
+
+                    for (const [request_id, req_obj] of Object.entries(result.data.incoming_friend_requests)) {
+                        appendFriendRequest(request_id, req_obj.from, req_obj.date_sent)
+                    }
+
                     break
 
                 case false:
@@ -1108,57 +1137,129 @@ const LogoutForm = {
     }
 }
 
-// const AddFriend = {
-//     validateUsername() {
-//         const element = document.getElementById("addfriend-name")
-//         return validateName(element)
-//     },
+const AddFriend = {
+    validateUsername() {
+        const element = document.getElementById("addfriend-name")
+        return validateName(element)
+    },
 
-//     sendRequest(e) {
-//         e.preventDefault()
-//         if (!this.validateUsername()) {
-//             return
-//         }
+    sendRequest(e) {
+        e.preventDefault()
+        if (!this.validateUsername()) {
+            return
+        }
 
-//         let username = document.getElementById("addfriend-name").value
+        let username = document.getElementById("addfriend-name").value
 
-//         let data = {
-//             username: username,
-//         };
+        let data = {
+            username: username,
+        };
 
-//         data = Object.assign(grabAuthData(), data)
+        data = Object.assign(grabAuthData(), data)
 
-//         const options = {
-//             method: 'POST',
-//             headers: {
-//                 'Content-Type': 'application/json'
-//             },
-//             body: JSON.stringify(data)
-//         };
+        const options = {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        };
 
-//         fetch(API_URL + "accounts/sendFriendRequest", options)
-//             .then(response => response.json())
-//             .then(result => {
-//                 console.log('Received response from SENDFRIENDREQUEST request')
+        fetch(API_URL + "accounts/sendFriendRequest", options)
+            .then(response => response.json())
+            .then(result => {
+                console.log('Received response from SENDFRIENDREQUEST request')
 
-//                 switch (result.status) {
-//                     case true:
-//                         showSuccess("Sent friend request to: " + username)
-//                         break
+                switch (result.status) {
+                    case true:
+                        showSuccess("Sent friend request to: " + username)
+                        break
 
-//                     case false:
-//                         handleApiError(result)
-//                         break
-//                 }
+                    case false:
+                        handleApiError(result)
+                        break
+                }
 
-//             })
-//             .catch(error => {
-//                 console.error('Error while sending SENDFRIENDREQUEST request', error);
-//             });
+            })
+            .catch(error => {
+                console.error('Error while sending SENDFRIENDREQUEST request', error);
+            });
 
-//     }    
+    }    
 
-// }
+}
+
+function acceptFriendRequest(request_id) {
+    let data = {
+        request_id: request_id
+    };
+
+    data = Object.assign(grabAuthData(), data)
+
+    const options = {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    };
+
+    fetch(API_URL + "accounts/acceptFriendRequest", options)
+        .then(response => response.json())
+        .then(result => {
+            console.log('Received response from ACCEPT_FRIEND_REQUEST request');
+            switch (result.status) {
+                case true:
+                    showSuccess("Added friend: " + result.username)
+                    removeFriendRequest(request_id)
+                    break
+
+                case false:
+                    handleApiError(result)
+                    break
+            }
+        })
+        .catch(error => {
+            console.error('Error while sending ACCEPT_FRIEND_REQUEST request', error);
+            showError("Cannot accept request.")
+        });
+}
+
+function rejectFriendRequest(request_id) {
+    let data = {
+        request_id: request_id
+    };
+
+    data = Object.assign(grabAuthData(), data)
+
+    const options = {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    };
+
+    fetch(API_URL + "accounts/rejectFriendRequest", options)
+        .then(response => response.json())
+        .then(result => {
+            console.log('Received response from REJECT_FRIEND_REQUEST request');
+            switch (result.status) {
+                case true:
+                    showWarning("Rejected friend request.")
+                    removeFriendRequest(request_id)
+                    break
+
+                case false:
+                    handleApiError(result)
+                    break
+            }
+        })
+        .catch(error => {
+            console.error('Error while sending REJECT_FRIEND_REQUEST request', error);
+            showError("Cannot accept request.")
+        });
+}
 
 
 // - roomview.html
@@ -1467,6 +1568,151 @@ function sendLockStateRequest(state) {
         .catch(error => {
             console.error('Error while sending LOCKSTATE request', error);
             showError("Cannot remove file.")
+        });
+}
+
+
+// -- dms --
+function loadDirectMessages(target_username) {
+    let data = {
+        target_username: target_username
+    };
+
+    data = Object.assign(grabAuthData(), data)
+
+    const options = {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    };
+
+    fetch(API_URL + "dms/loadMessages", options)
+        .then(response => response.json())
+        .then(result => {
+            console.log('Received response from LOAD_MESSAGES request');
+            switch (result.status) {
+                case true:
+
+                    all_messages = result.messages
+                    all_messages.forEach(
+                        msg_obj => {
+                            author = msg_obj.author
+                            target = msg_obj.target
+                            content = msg_obj.content
+                            date_sent = msg_obj.date_sent
+                            id = msg_obj.id
+                            // TODO: do smth with it
+                        }
+                    )
+                    break
+
+                case false:
+                    handleApiError(result)
+                    break
+            }
+        })
+        .catch(error => {
+            console.error('Error while sending LOAD_MESSAGES request', error);
+            showError("Cannot load messages.")
+        });
+}
+
+function sendDirectMessage(target_username, content) {
+    let data = {
+        target_username: target_username,
+        content: content
+    };
+
+    data = Object.assign(grabAuthData(), data)
+
+    const options = {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    };
+
+    fetch(API_URL + "dms/sendMessage", options)
+        .then(response => response.json())
+        .then(result => {
+            console.log('Received response from SEND_MESSAGE request');
+            switch (result.status) {
+                case false:
+                    handleApiError(result)
+                    break
+            }
+        })
+        .catch(error => {
+            console.error('Error while sending SEND_MESSAGE request', error);
+            showError("Cannot send message.")
+        });
+}
+
+function reomveDirectMessage(target_username, msg_id) {
+    let data = {
+        target_username: target_username,
+        message_id: msg_id
+    };
+
+    data = Object.assign(grabAuthData(), data)
+
+    const options = {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    };
+
+    fetch(API_URL + "dms/removeMessage", options)
+        .then(response => response.json())
+        .then(result => {
+            console.log('Received response from REMOVE_MESSAGE request');
+            switch (result.status) {
+                case false:
+                    handleApiError(result)
+                    break
+            }
+        })
+        .catch(error => {
+            console.error('Error while sending REMOVE_MESSAGE request', error);
+            showError("Cannot remove message.")
+        });
+}
+
+function editDirectMessage(target_username, msg_id, new_content) {
+    let data = {
+        target_username: target_username,
+        message_id: msg_id,
+        new_content: new_content
+    };
+
+    data = Object.assign(grabAuthData(), data)
+
+    const options = {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    };
+
+    fetch(API_URL + "dms/editMessage", options)
+        .then(response => response.json())
+        .then(result => {
+            console.log('Received response from EDIT_MESSAGE request');
+            switch (result.status) {
+                case false:
+                    handleApiError(result)
+                    break
+            }
+        })
+        .catch(error => {
+            console.error('Error while sending EDIT_MESSAGE request', error);
+            showError("Cannot edit message.")
         });
 }
 

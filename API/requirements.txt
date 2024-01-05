@@ -3,3 +3,4 @@ websockets
 fastapi
 bcrypt
 python-multipart
+schedule

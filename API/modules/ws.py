@@ -17,16 +17,57 @@ DESCRIPTION
       "status": STRING
       "data": OBJECT
     }
+
+    DirectMessagesServer message scheme:
+    {
+      "author": STRING
+      "content": STRING
+      "date_sent": STRING
+      "message_id": STRING
+    }
 """
+from modules import timestamp
 from modules import logs
 
 from fastapi import WebSocket
+from typing import List
 
 
 class NotificationStatus:
     ROOM_NOTIFICATION = "ROOM_NOTIFICATION"
     ROOM_REMOVED = "RM_ROOM"
     KICKED_FROM_ROOM = "ROOM_KICK"
+
+
+class NotificationBuffer:
+    client_buffer: dict[str, List[str]] = {}
+
+    @staticmethod
+    def feed_buffer(db_key: str, room_code: str) -> None:
+        """ Feed user's buffer with rooom code. """
+        if db_key not in NotificationBuffer.client_buffer:
+            NotificationBuffer.client_buffer[db_key] = [room_code]
+            logs.websocket_logger.log(db_key, f"Created user's buffer and fed with: {room_code}")
+            return
+        
+        NotificationBuffer.client_buffer[db_key].append(room_code)
+        logs.websocket_logger.log(db_key, f"Fed buffer with: {room_code}")
+        
+    @staticmethod
+    async def flush_buffer(db_key: str) -> None:
+        """ Send notifications from buffer to user. """
+        if db_key not in NotificationBuffer.client_buffer:
+            return
+        
+        if db_key not in DashboardNotificationServer.clients:
+            logs.websocket_logger.log(db_key, "Cannot flush buffer: user is not registered in DashboardNotificaitonServer")
+            return
+
+        for room_code in NotificationBuffer.client_buffer.get(db_key):
+            await DashboardNotificationServer.send_message_to(db_key, NotificationStatus.ROOM_NOTIFICATION, room_code)
+
+        NotificationBuffer.client_buffer.pop(db_key)            
+        logs.websocket_logger.log(db_key, "Flushed user's buffer.")        
 
 
 class DashboardNotificationServer:
@@ -143,3 +184,52 @@ class InRoomEventsServer:
         logs.websocket_logger.log(self.room_key, f"Sent: {status.upper()} in room event.")
         
     
+class DirectMessagesServer:
+    clients: dict[str, WebSocket] = {}
+
+    @staticmethod
+    async def register_client(db_key: str, client: WebSocket) -> None:
+        """ Register new client. """
+        if db_key in DirectMessagesServer.clients:
+            logs.websocket_logger.log("DirectMessagesServer", f"Client already registered: {db_key}")
+            return
+
+        await client.accept()
+        DirectMessagesServer.clients[db_key] = client
+        logs.websocket_logger.log("DirectMessagesServer", f"Registered new client: {db_key}")
+
+    @staticmethod
+    async def remove_client(db_key: str) -> None:
+        """ Remove client from register. """
+        if db_key not in DirectMessagesServer.clients:
+            logs.websocket_logger.log("DirectMessagesServer", f"Cannot remove client from register: {db_key} (not found)")
+            return 
+        
+        DirectMessagesServer.clients.pop(db_key)
+        logs.websocket_logger.log("DirectMessagesServer", f"Removed client from register: {db_key}")
+
+    @staticmethod
+    def get_client_ws(db_key: str) -> WebSocket | None:
+        """ Returns registered client's websocket or None if not found. """
+        ws = DirectMessagesServer.clients.get(db_key)
+        if ws is None:
+            logs.websocket_logger.log(db_key, f"Cannot get client from register: {db_key} (not found)")
+        return ws
+
+    @staticmethod
+    async def notify_user(db_key: str, message) -> None:
+        """ Send notification to user. """
+        ws = DirectMessagesServer.get_client_ws(db_key)
+
+        if ws is None:
+            logs.websocket_logger.log(db_key, "Cannot notify client: not registered")
+            return
+        
+        await ws.send_json({
+            "author": message.author,
+            "content": message.content,
+            "date_sent": timestamp.convert_to_readable(message.date_sent),
+            "message_id": message.id
+        })
+
+        logs.websocket_logger.log(db_key, f"Sent DM notification from: {message.author}")

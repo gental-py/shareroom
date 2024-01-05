@@ -40,7 +40,7 @@ import uuid
 import json
 
 
-UNDEFINED_DEFAULT_VALUE = "_NOTDEF"
+UNDEFINED_DEFAULT_VALUE = db_models.NOT_REQUIRED
 SET_AFTER_INIT = "_SET_AFTER_INIT"
 
 
@@ -98,15 +98,9 @@ class Column:
 
     def prepare_value(self, value: Any) -> Any:
         """ Cast value to required type if is not. """
-        if value == db_models.NOT_REQUIRED:
+        if value == db_models.NOT_REQUIRED or value is None:
             value = self.type_() if self.default == UNDEFINED_DEFAULT_VALUE else self.default
-            
-        elif value is None:
-            if self.default != UNDEFINED_DEFAULT_VALUE:
-                value = self.type_()
-            else:
-                raise RequiredValueNotProvided(f"column: {self.name}")
-
+             
         elif not isinstance(value, self.type_):
             value = self.type_(value)
 

@@ -64,7 +64,7 @@ DESCRIPTION
       - `addMessage` (POST)
       - `leaveRoom` (POST)
       - `roomData/{room_key}` (GET)
-      - `ws/{room_key}/{db_key}` (WS)
+      - `room_ws/{room_key}/{db_key}` (WS)
       - `notificationServer/{db_key}` (WS)
 
       /admin/
@@ -107,7 +107,6 @@ def generate_response_and_log(
     logs.access_logger.log(request, f"<{status}> " + log_message)
 
     data = {"status": status}
-
     if additional_data:
         data.update(additional_data)
     if not status:
@@ -221,10 +220,10 @@ async def account_login(data: request_models.M_AccountLogin, request: Request) -
         session.drop()
         logs.sessions_logger.log(session.session_id, f"Found expired session while login: {session.session_id}")
 
-    # for room_key in account.active_rooms:
-    #     room = rooms.Room.get_room_by_key(room_key)
-    #     if room.last_interaction > account.last_interaction:
-    #         ws.NotificationServer.feed_buffer(account.db_key, room.code)
+    for room_key in account.active_rooms:
+        room = rooms.Room.get_room_by_key(room_key)
+        if room.last_interaction > account.last_interaction:
+            ws.NotificationBuffer.feed_buffer(account.db_key, room.code)
 
     session = account.get_session()
     session.renew()
@@ -232,7 +231,10 @@ async def account_login(data: request_models.M_AccountLogin, request: Request) -
         request,
         True,
         f"Successful login for: {account.db_key}",
-        additional_data={"db_key": account.db_key, "session_id": session.session_id}
+        additional_data = {
+            "db_key": account.db_key,
+            "session_id": session.session_id
+        }
     )
 
 @api.post("/accounts/logout")
@@ -331,8 +333,8 @@ async def get_account_data(data: request_models.M_AccountData, request: Request)
                     "is_admin": BOOLEAN
               }
             }
-          | "notifications": [ROOM_CODE: STRING, ROOM_CODE: STRING...]
-          | "friends" [USERNAME: STRING, USERNAME: STRING...]
+          | "notifications": [ROOM_CODE, ROOM_CODE...]
+          | "friends" [USERNAME, USERNAME...]
           | "incoming_friend_requests": {
               "REQUEST_ID": {
                 "from": STRING,
@@ -385,6 +387,7 @@ async def get_account_data(data: request_models.M_AccountData, request: Request)
     for friend_request in friend_requests.FriendRequest.get_requests_to_account(data.db_key):
         try:
             author_account = users.User.get_user_by_key(friend_request.author)
+            
         except database.KeyNotFound:
             logs.users_logger.log(account.db_key, f"Friend request's author account not found: {friend_request.author}")
             friend_request.remove()
@@ -399,7 +402,7 @@ async def get_account_data(data: request_models.M_AccountData, request: Request)
             }
         })
 
-    # await ws.NotificationServer.flush_buffer(account.db_key)
+    await ws.NotificationBuffer.flush_buffer(account.db_key)
     return generate_response_and_log(
         request,
         True,
@@ -461,7 +464,12 @@ async def send_friend_request(data: request_models.M_SendFriendRequest, request:
 @api.post("/accounts/acceptFriendRequest")
 @sessions.validate_client
 async def accept_friend_request(data: request_models.M_AcceptFriendRequest, request: Request) -> JSONResponse:
-    """ Accept pending friend request. """
+    """ 
+    Accept pending friend request.
+    
+    Additional data on success:
+        + username
+    """
     if data.request_id not in database.friend_requests_db.get_all_keys():
         return generate_response_and_log(
             request,
@@ -470,13 +478,26 @@ async def accept_friend_request(data: request_models.M_AcceptFriendRequest, requ
             "Friend request not found."
         )
     
+
     friend_request = friend_requests.FriendRequest.get_request_by_key(data.request_id)
+
+    if data.db_key != friend_request.target:
+        return generate_response_and_log(
+            request,
+            False,
+            f"Cannot accept friend request: action not called by target (called by: {data.db_key})",
+            "You are not request's target."
+        ) 
+
     friend_request.accept()
     
     return generate_response_and_log(
         request,
         True,
-        f"Accepted friend request: {data.request_id} from: {friend_request.author} to: {friend_request.target}"
+        f"Accepted friend request: {data.request_id} from: {friend_request.author} to: {friend_request.target}",
+        additional_data = {
+            "username": friend_request.author 
+        }
     )
 
 @api.post("/accounts/rejectFriendRequest")
@@ -529,7 +550,7 @@ async def load_dms(data: request_models.M_LoadDirectMessages, request: Request) 
             request,
             False,
             "Target username not found",
-            "User not found"
+            "User not found."
         )
     
     relation_id = direct_messages.create_relation_id(data.db_key, target_account.db_key)

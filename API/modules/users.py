@@ -91,7 +91,6 @@ class User:
     @staticmethod
     def from_model(user_model: UserModel) -> "User":
         """ Convert dbmodels.UserModel into User(). """
-        print(f"user_model.active_rooms ({user_model.username}): ", user_model.active_rooms)
         return User(
             username=user_model.username,
             password=user_model.password,
