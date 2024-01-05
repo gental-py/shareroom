@@ -5,36 +5,14 @@ MODULE
 DESCRIPTION
     Custom key-value, json based database system.
 
-CODE SUMMARY
-  KeyNotFound:
-      Exception raised when provided key
-      has not been found in database.
-  
-  Column:
-      Parsed form of each Model's entry (row).
-  
-      Contains:
-          - name
-          - type
-          - default value
-  
-      Model:  date_join: int = None
-      Column: name       type  default
-  
-      Methods:
-          - prepare_value(value)
-            Casts value's type to required by Column.
-          - validate(value) -> bool
-            Validates value's type.
-  
-  Database:
+    Database:
       Database must be initialized from model which type is called T_Model.
       Each database contains ONLY ONE column, name and it's file path.
       After initialization, DB's object is saved into register.
       Register prevents reinitialization and allows quick DB access.
       You can get initialized Database object by calling Database.get_database(name).
   
-      Methods: (only public)
+      Interface methods:
           - insert(data: T_Model) -> str
             Inserts new row to database, returns provided key.
           - update(key: str, changes: dict[str, Any], iter_append: bool = False, iter_pop: bool = True)
@@ -50,18 +28,16 @@ CODE SUMMARY
       users_db, rooms_db, sessions_db
   
 """
-from models.db_models import UserModel, RoomModel, SessionModel
-from models.db_models import NOT_REQUIRED, KEY_AS_UUID4
+from models import db_models
 
-from modules.logs import SysLogger
 from modules import timestamp
+from modules import logs
 
-from dataclasses import dataclass, fields, asdict
+from dataclasses import dataclass, asdict
 from typing import Any, List, Iterable
 import hashlib
 import uuid
 import json
-import os
 
 
 UNDEFINED_DEFAULT_VALUE = "_NOTDEF"
@@ -73,7 +49,35 @@ class KeyNotFound(Exception):
     Exception raised when provided key
     has not been found in database.
     """
-    pass
+
+
+class RequiredValueNotProvided(Exception):
+    """
+    Exception raised when value for required
+    column wasn't provided
+    """
+
+
+def parse_key_provider(key_provider: str, model) -> str:
+    """ Create db_key from model and it's key_provider. """
+    if key_provider == db_models.KEY_AS_UUID4:
+        return uuid.uuid4().hex
+
+    no_hash = key_provider.startswith("!")
+    key_provider = key_provider.removeprefix("!")
+
+    if "+" in key_provider:
+        attributes = key_provider.split("+")
+        key_seed = ""
+        for attr in attributes:
+            key_seed += getattr(model, attr)
+    else:
+        key_seed = getattr(model, key_provider)
+
+    if no_hash:
+        return key_seed
+    
+    return hashlib.sha1(key_seed.encode()).hexdigest()
 
 
 @dataclass
@@ -90,15 +94,18 @@ class Column:
     default: Any = UNDEFINED_DEFAULT_VALUE
 
     def __repr__(self) -> str:
-        return f"<COLUMN: name={self.name} type:{self.type_} default:{self.default}>"
+        return f"<Column: name={self.name} type:{self.type_} default:{self.default}>"
 
     def prepare_value(self, value: Any) -> Any:
         """ Cast value to required type if is not. """
-        if value is None or value == NOT_REQUIRED:
+        if value == db_models.NOT_REQUIRED:
+            value = self.type_() if self.default == UNDEFINED_DEFAULT_VALUE else self.default
+            
+        elif value is None:
             if self.default != UNDEFINED_DEFAULT_VALUE:
                 value = self.type_()
             else:
-                SysLogger.error("Required value not provided")
+                raise RequiredValueNotProvided(f"column: {self.name}")
 
         elif not isinstance(value, self.type_):
             value = self.type_(value)
@@ -110,9 +117,9 @@ class Column:
         return isinstance(value, self.type_)
 
 
-class Database[T_Model]:
+class Database:
     """
-    Database must be initialized from model which type is called T_Model.
+    Database must be initialized from DBModel.
     Each database contains ONLY ONE column, name and it's file path.
     After initialization, DB's object is saved into register.
     Register prevents reinitialization and allows quick DB access.
@@ -127,22 +134,24 @@ class Database[T_Model]:
             return None
         return Database.register.get(name)
 
-    def __init__(self, model: T_Model):
-        self.__model: T_Model = model
-        self.name: str = ""
-        self.filepath: str = ""
-        self.key_provider: str = ""
+    def __init__(self, model: db_models.DBModel):
+        self.__model: db_models.DBModel = model.__dbmodel__
+        self.name = self.__model.name
+        self.filepath = self.__model.file_path
+        self.key_provider = self.__model.key_provider
+        self.allow_invalid_values = self.__model.allow_invalid_values
+        self.dump_on_error = self.__model.dump_on_error
         self.columns: dict[str, Column] = {}
 
         if self.name in Database.register:
-            SysLogger.warn(f"Database: {self.name} is already initialized.")
+            logs.database_logger.log(self.name, f"Database: {self.name} is already initialized.")
             self = Database.register.get(self.name)
             return
 
         self.__build_from_model()
         self.__ensure_db_file()
         Database.register[self.name] = self
-        SysLogger.info(f"Build Database object for: {self.name} {repr(self)}")
+        logs.database_logger.log(self.name, f"Build Database object for: {self.name} {repr(self)}")
 
     def __repr__(self) -> str:
         return f"<DB: name={self.name} keyProvider={self.key_provider} columns={set(self.columns.keys())} file={self.filepath}>"
@@ -152,92 +161,76 @@ class Database[T_Model]:
         Read and parse all data from DB's model provided at initialization.
         Reads model's properties and turns each key into Column object.
         """
-        self.name = self.__model.__tablename__
-        self.filepath = self.__model.__filepath__
-        self.key_provider = self.__model.__keyprovider__
-
-        object_fields = fields(self.__model)
-        for field in object_fields:
-            try:
-                default_value = getattr(self.__model, field.name)
-            except AttributeError:
+        object_fields = self.__model.fields
+        for field_name, field_type in object_fields.items():
+            if hasattr(self.__model.model_cls, field_name):
+                default_value = getattr(self.__model.model_cls, field_name)
+            else:
                 default_value = UNDEFINED_DEFAULT_VALUE
 
-            column = Column(field.name, field.type, default_value)
-            self.columns[field.name] = column
+            column = Column(field_name, field_type, default_value)
+            self.columns[field_name] = column
 
     def __ensure_db_file(self) -> None:
         """ Check and create blank DB file if not exists. """
-        if not os.path.exists(self.filepath):
-            with open(self.filepath, "a+") as file:
-                SysLogger.info(f"Created DB file: {self.filepath}")
-                json.dump({}, file)
-                
+        if not self.filepath.exists():
+            self.filepath.touch()
+            self.filepath.save_json_content({})
             return
 
         try:
             self.__get_db_content()
 
         except json.JSONDecodeError:
-            with open(self.filepath, "r") as file_read:
-                corrupted_content = file_read.read()
-
-            with open(self.filepath+".dump", "a+") as dumpfile:
-                dumpfile.write(f"\n\n--- DUMP: {timestamp.generate_timestamp()} ---\n" + corrupted_content)
-
-            with open(self.filepath, "w") as file_write:
-                SysLogger.error(f"DB file: {self.filepath} was corrupted and content was saved to {self.filepath}.dump")
-                json.dump({}, file_write)
+            if not self.dump_on_error:
+                raise
+            
+            corrupted_content = self.filepath.read()
+            dumpfile_content = f"\n\n--- DUMP: {timestamp.generate_timestamp()} ---\n" + corrupted_content
+            (self.filepath + ".dump").touch().write(dumpfile_content)
+            self.filepath.save_json_content({})
 
     def __get_db_content(self) -> dict:
         """ Get and return database's file content as dict. """
-        with open(self.filepath, "r") as file:
-            return json.loads(file.read())
+        return self.filepath.get_json_content()
 
-    def __save_model(self, model: T_Model, db_key: str = None) -> str:
+    def __save_model(self, model: db_models.DBModel, db_key: str = None) -> str:
         """
         Write entry to database. If key is not provided,
         new entry will be created with provided key.
         Returns database key.
         """
         if db_key is None:
-            if self.key_provider == KEY_AS_UUID4:
-                db_key = uuid.uuid4().hex
-            elif self.key_provider.startswith("!"):
-                db_key = getattr(model, self.key_provider.removeprefix("!"))
-            else:
-                key_seed = getattr(model, self.key_provider)
-                db_key = hashlib.sha1(key_seed.encode()).hexdigest()
+            db_key = parse_key_provider(self.key_provider, model)
 
         content = {}
         for column_name, value in asdict(model).items():
             column = self.columns.get(column_name)
             value = column.prepare_value(value)
-            if not column.validate(value):
-                SysLogger.warn(f"Value: <{value}> did not pass column's validation.")
-                if column.default != UNDEFINED_DEFAULT_VALUE:
-                    SysLogger.warn(f"Replaced <{value}> with default value.")
-                    value = column.default
 
-                else:
-                    SysLogger.error(f"Column: {repr(column)} have no default value. Using type's default.")
+            if not column.validate(value):
+                logs.database_logger.log(self.name, f"Value: <{value}> did not pass column's validation.")
+
+                if column.default != UNDEFINED_DEFAULT_VALUE:
+                    value = column.default
+                    logs.database_logger.log(self.name, f"Replaced <{value}> with default value.")
+
+                elif self.allow_invalid_values:
                     value = column.type_()
+                    logs.database_logger.log(self.name, f"Column: {repr(column)} have no default value. Using type's default as it is allowed.")
+                    
+                else:
+                    logs.database_logger.log(self.name, f"Column: {repr(column)} have no default value. Invalid values are not allowed. Model will not be saved.")
+                    return
 
             content[column_name] = value
 
-        current_content = self.__get_db_content()
-        with open(self.filepath, "w") as file:
-            current_content[db_key] = content
-            json.dump(current_content, file, indent=2, separators=(',', ': '), ensure_ascii=True)
-
+        db_content = self.__get_db_content()
+        db_content[db_key] = content
+        self.filepath.save_json_content(db_content)
         return db_key
 
-    def __write_content(self, content: dict) -> None:
-        """ Write content to DB file. """
-        with open(self.filepath, "w") as file:
-            json.dump(content, file, indent=2, separators=(',', ': '), ensure_ascii=True)
-
-    def insert(self, data: T_Model) -> str:
+    def insert(self, data: db_models.DBModel) -> str:
         """ Insert new entry to database. Returns key. """
         return self.__save_model(data)
 
@@ -254,13 +247,13 @@ class Database[T_Model]:
           instead of being completely replacing list new data.
         """
         if iter_append and iter_pop:
-            SysLogger.error("method called with both iter_append and iter_pop flags!")
+            logs.database_logger.log(self.name, "method called with both iter_append and iter_pop flags!")
             return
         
         model_object = self.get(key)
         for key_name, value in changes.items():
             if not hasattr(model_object, key_name):
-                SysLogger.error(f"Cannot change value of {key_name} (key not found)")
+                logs.database_logger.log(self.name, f"Cannot change value of {key_name} (key not found)")
                 continue
 
             if iter_append and isinstance(value, Iterable):
@@ -275,22 +268,23 @@ class Database[T_Model]:
                         current_data.remove(value)
                         value = current_data
                     else:
-                        SysLogger.error(f"Cannot iter_pop {value} from {key_name} (not found)")
+                        logs.database_logger.log(self.name, f"Cannot iter_pop {value} from {key_name} (not found)")
                         return
                     
             setattr(model_object, key_name, value)
+
         self.__save_model(model_object, key)
 
     def delete(self, key: str) -> None:
         """ Delete key-value pair from database. """
         db_content = self.__get_db_content()
         if key not in db_content:
-            raise KeyNotFound
+            raise KeyNotFound(f"db: {self.name} key: {key}")
         
         db_content.pop(key)
-        self.__write_content(db_content)
+        self.filepath.save_json_content(db_content)
 
-    def get(self, key: str) -> T_Model:
+    def get(self, key: str) -> db_models.DBModel:
         """
         Get object from database by it's key.
         Raises KeyNotFound error if key is invalid.
@@ -298,14 +292,14 @@ class Database[T_Model]:
         db_content = self.__get_db_content()
         object_content = db_content.get(key)
         if object_content is None:
-            SysLogger.error(f"({self.name}) KeyNotFound: {key}")
-            raise KeyNotFound
+            logs.database_logger.log(self.name, f"({self.name}) KeyNotFound: {key}")
+            raise KeyNotFound(f"db: {self.name} key: {key}")
 
         model_object = self.__model(**object_content)
         model_object._key = key
         return model_object
 
-    def get_all_models(self) -> List[T_Model]:
+    def get_all_models(self) -> List[db_models.DBModel]:
         """ Get all models saved in database. """
         objects = []
         db_content = self.__get_db_content()
@@ -321,6 +315,7 @@ class Database[T_Model]:
         return list(self.__get_db_content().keys())
 
 
-users_db = Database(UserModel)
-rooms_db = Database(RoomModel)
-sessions_db = Database(SessionModel)
+users_db = Database(db_models.UserModel)
+rooms_db = Database(db_models.RoomModel)
+sessions_db = Database(db_models.SessionModel)
+friend_requests_db = Database(db_models.FriendRequestsModel)

@@ -4,111 +4,142 @@ MODULE
 
 DESCRIPTION
     WebSockets managers.
+
+    DashboardNotificationServer message scheme:
+    {
+      "status": "ROOM_NOTIFICATION"/"RM_ROOM"/"ROOM_KICK"
+      "room_code": STRING
+      (*) "room_name": STRING 
+    }
+    
+    InRoomEventsServer message scheme:
+    {
+      "status": STRING
+      "data": OBJECT
+    }
 """
-from modules.logs import WsLogger
+from modules import logs
 
 from fastapi import WebSocket
 
 
-class NotificationServer:
-    """ 
-    Clients register to receive live notifications 
-      from all of their's active rooms while they are on dashboard.
-    Unsent buffer holds rooms that user should be notified about.
-      flush_buffer() sends all rooms to user.
-      feed_buffer() appends room_code to user's buffer.
-    """
-    register: dict[str, WebSocket] = {}
-    unsent_buffer: dict[str, list[str]] = {}
+class NotificationStatus:
+    ROOM_NOTIFICATION = "ROOM_NOTIFICATION"
+    ROOM_REMOVED = "RM_ROOM"
+    KICKED_FROM_ROOM = "ROOM_KICK"
+
+
+class DashboardNotificationServer:
+    clients: dict[str, WebSocket] = {}
 
     @staticmethod
     async def register_client(db_key: str, client: WebSocket) -> None:
-        """ Register new client to NS. """
-        await client.accept()
-        NotificationServer.register[db_key] = client
-        WsLogger.log("NS", f"Registered new client: {db_key}")
-
-    @staticmethod
-    def remove_client(db_key: str) -> None:
-        """ Remove client from room's register. """
-        if db_key in NotificationServer.register:
-            WsLogger.log("NS", f"Removed client from register: {db_key}")
-            NotificationServer.register.pop(db_key)
-
-    @staticmethod
-    async def notify_room_event(room, status: str = "notification") -> None:
-        """ Iterate over all registered account and send message to all room members. """
-        for db_key in NotificationServer.register:
-            if room.has_member(db_key):
-                WsLogger.log("NS", f"Notifying client: {db_key} for room: {room.db_key}")
-                ws = NotificationServer.register.get(db_key)
-                await ws.send_json({"status": status, "room_code": room.code})
-
-    @staticmethod
-    async def flush_buffer(db_key: str) -> None:
-        """ Send all notification about event in all rooms saved in buffer to user. """
-        client_ws = NotificationServer.register.get(db_key, False)
-        if client_ws is False:
-            WsLogger.log("NS", "Cannot flush buffer (client is not registered)")
+        """ Register new client. """
+        if db_key in DashboardNotificationServer.clients:
+            logs.websocket_logger.log("DashboardNotificationServer", f"Client already registered: {db_key}")
             return
 
-        room_codes = NotificationServer.unsent_buffer.get(db_key, [])
-        for room_code in room_codes:
-            await client_ws.send_json({"status": "notification", "room_code": room_code})
-
-        if db_key in NotificationServer.unsent_buffer:
-            NotificationServer.unsent_buffer.pop(db_key)
-            WsLogger.log("NS", f"Flushed buffer containing {len(room_codes)} unsent notifications for: {db_key}")
+        await client.accept()
+        DashboardNotificationServer.clients[db_key] = client
+        logs.websocket_logger.log("DashboardNotificationServer", f"Registered new client: {db_key}")
 
     @staticmethod
-    def feed_buffer(db_key: str, room_code: str) -> None:
-        """ Append room_code to user's unsent_buffer. """
-        if db_key not in NotificationServer.unsent_buffer:
-            NotificationServer.unsent_buffer[db_key] = [room_code]
-            WsLogger.log("NS", f"Feed buffer for: {db_key} with: {room_code} (created buffer)")
+    async def remove_client(db_key: str) -> None:
+        """ Remove client from register. """
+        if db_key not in DashboardNotificationServer.clients:
+            logs.websocket_logger.log("DashboardNotificationServer", f"Cannot remove client from register: {db_key} (not found)")
+            return 
+        
+        DashboardNotificationServer.clients.pop(db_key)
+        logs.websocket_logger.log("DashboardNotificationServer", f"Removed client from register: {db_key}")
+
+    @staticmethod
+    def get_client_ws(db_key: str) -> WebSocket | None:
+        """ Returns registered client's websocket or None if not found. """
+        ws = DashboardNotificationServer.clients.get(db_key)
+        if ws is None:
+            logs.websocket_logger.log(db_key, f"Cannot get client from register: {db_key} (not found)")
+        return ws
+
+    @staticmethod
+    async def send_message_to(db_key: str, status: NotificationStatus, room_code: str, room_name: str = None) -> None:
+        """ Send message to single client. """ 
+        ws = DashboardNotificationServer.get_client_ws(db_key)
+        if ws is None:
+            logs.websocket_logger.log(db_key, "Cannot send message to client")
             return
         
-        NotificationServer.unsent_buffer[db_key].append(room_code)
-        WsLogger.log("NS", f"Feed buffer for: {db_key} with: {room_code}")
+        content = {
+            "status": status,
+            "room_code": room_code
+        }
+        
+        if room_name is not None:
+            content.update({"room_name": room_name})
+        
+        await ws.send_json(content)
+        logs.websocket_logger.log(db_key, f"Sent message ({status})")
 
+    @staticmethod
+    async def send_room_notification(room, status: NotificationStatus, include_room_name: bool = False) -> None:
+        """ Send notification to all room's members not being connected to the room. """
+        for db_key in DashboardNotificationServer.clients.keys():
+            if not room.has_member(db_key):
+                continue
+        
+            await DashboardNotificationServer.send_message_to(
+                db_key,
+                status,
+                room.code,
+                room.name if include_room_name else None
+            )
+            logs.websocket_logger.log(room.db_key, f"Notifying client: {db_key} for room: {room.db_key}")
 
-class RoomConnectionManager:
-    """ Keep track of websocket clients of specific room. """
-    register = {}
+    
+class InRoomEventsServer:
+    rooms_instances: dict[str, "InRoomEventsServer"] = {}
 
+    @staticmethod
+    def get_instance(room_key: str) -> "InRoomEventsServer":
+        """ Return instance of InRoomEventsServer for specified room_key. """
+        instance = InRoomEventsServer.rooms_instances.get(room_key)
+        if instance is None:
+            instance = InRoomEventsServer(room_key)
+            InRoomEventsServer.rooms_instances[room_key] = instance
+            logs.websocket_logger.log(room_key, "Created InRoomEventsServer")
+        return instance
+    
     def __init__(self, room_key: str) -> None:
-        self.room_key = room_key
-        self.clients: dict[str, WebSocket] = {}
+        self.room_key = room_key 
+        self.connections: list[WebSocket] = []
 
-    async def register_client(self, db_key: str, client: WebSocket) -> None:
-        """ Accept pending request from websocket client and register address. """
-        await client.accept()
-        WsLogger.log(self.room_key, f"Registered client: {client.client} for: {db_key}")
-        self.clients[db_key] = client
+    async def assign_to_room(self, websocket: WebSocket) -> None:
+        """ Assign client's connection to room's register. """
+        if websocket in self.connections:
+            logs.websocket_logger.log(self.room_key, "Connection already in room register.")
+            return
+        
+        await websocket.accept()
+        
+        self.connections.append(websocket)
+        logs.websocket_logger.log(self.room_key, "Assigned new connection to room's register.")
 
-    def remove_client(self, db_key: str) -> None:
-        """ Remove client from room's register. """
-        if db_key in self.clients:
-            WsLogger.log(self.room_key, f"Removed client from register: {db_key}")
-            self.clients.pop(db_key)
+    def remove_from_room(self, websocket: WebSocket) -> None:
+        """ Remove connection from room's register. """
+        if websocket not in self.connections:
+            logs.websocket_logger.log(self.room_key, "Cannot remove connection from register (not found)")
+            return
+        
+        self.connections.remove(websocket)
+        logs.websocket_logger.log(self.room_key, "Removed connection from room's register.")
+
+    async def send_event(self, status: str, content: dict = {}) -> None:
+        """ Send in-room update to connected clients. """
+        for connection in self.connections:
+            await connection.send_json({
+                "status": status.upper(),
+                "data": content
+            })
+        logs.websocket_logger.log(self.room_key, f"Sent: {status.upper()} in room event.")
+        
     
-    async def send_to_everyone(self, content: dict) -> None:
-        """ Send content to all registered addresses. """
-        WsLogger.log(self.room_key, f"Sending message to: {len(self.clients)} clients")
-        for ws in self.clients.values():
-            await ws.send_json(content)
-
-
-def get_instance(room_key: str) -> "RoomConnectionManager":
-    """
-    Get instance of RoomConnectionManager for specific room.
-    If instance has been already registered before, return existing one,
-      else, create new one. 
-    """
-    if room_key in RoomConnectionManager.register:
-        return RoomConnectionManager.register.get(room_key)
-    
-    instance = RoomConnectionManager(room_key)
-    RoomConnectionManager.register[room_key] = instance
-    WsLogger.log(room_key, "Created new RoomConnectionManager instance.")
-    return instance

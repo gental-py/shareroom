@@ -9,7 +9,8 @@ from datetime import datetime as Datetime
 from datetime import timedelta
 
 
-ROOM_EXISTENCE_PERIOD_H = 24
+INACTIVE_USER_EXISTENCE_PERIOD_D = 30
+INACTIVE_ROOM_EXISTENCE_PERIOD_D = 14
 SESSION_EXISTENCE_PERIOD_H = 1
 
 
@@ -28,12 +29,19 @@ def read_timestamp(timestamp: int) -> Datetime:
     return Datetime.fromtimestamp(timestamp)
 
 
-def create_room_remove_timestamp(date_created_timestamp: int) -> int:
-    """ Create room's remove timestamp based on constant value. """
-    base = read_timestamp(date_created_timestamp)
-    remove_dt = base + timedelta(hours=ROOM_EXISTENCE_PERIOD_H)
-    return generate_timestamp(remove_dt)
+def is_room_expired(last_interaction: int) -> bool:
+    """ Check if room has expired. """
+    base = read_timestamp(last_interaction)
+    expiration_dt = base + timedelta(days=INACTIVE_ROOM_EXISTENCE_PERIOD_D)
+    return Datetime.now() > expiration_dt 
 
+
+def is_user_expired(last_interaction: int) -> bool:
+    """ Check if user is expired. """
+    base = read_timestamp(last_interaction)
+    expiration_dt = base + timedelta(days=INACTIVE_USER_EXISTENCE_PERIOD_D)
+    return Datetime.now() > expiration_dt
+    
 
 def create_session_expiration_datetime(date_created_timestamp: int) -> Datetime:
     """ Create session's remove timestamp based on constant value. """

@@ -5,12 +5,13 @@ MODULE
 DESCRIPTION
     Manage user sessions.
 """
+from models.db_models import SessionModel
+
 from modules.database import SET_AFTER_INIT
-from modules.ws import NotificationServer
-from modules.logs import SessionLogger
 from modules import timestamp
-from modules import accounts
 from modules import database
+from modules import users
+from modules import logs
 
 from fastapi.responses import JSONResponse
 from datetime import datetime as Datetime
@@ -23,6 +24,24 @@ VALIDATION_FAIL_ERRMSG = "@VALIDATION_FAIL"
 VALIDATION_FAIL_RESPONSE = JSONResponse({"status": False, "err_msg": VALIDATION_FAIL_ERRMSG}, 400)
 
 
+def remove_expired_sessions() -> None:
+    """
+    This function is meant to run at startup.
+    It removes all left sessions that are expired.
+    """
+    removed_amount = 0
+
+    for session_model in database.sessions_db.get_all_models():
+        session = Session.from_model(session_model)
+        if session.is_expired():
+            logs.sessions_logger.log(session.session_id, "Removed expired session")
+            session.drop()
+            removed_amount += 1 
+
+    if removed_amount > 0:
+        logs.sessions_logger.log("-", f"Removed: {removed_amount} expired sessions")
+
+
 @dataclass
 class Session:
     user_key: str
@@ -33,7 +52,7 @@ class Session:
 
 
     @staticmethod
-    def from_model(model: database.SessionModel) -> "Session":
+    def from_model(model: SessionModel) -> "Session":
         """ Build Session object from it's database model. """
         return Session(
             user_key=model.user_key,
@@ -47,7 +66,7 @@ class Session:
         date_created = timestamp.generate_timestamp()
         session_id = uuid4().hex
 
-        model = database.SessionModel(
+        model = SessionModel(
             user_key=user_key,
             session_id=session_id,
             date_created=date_created,
@@ -62,7 +81,7 @@ class Session:
         )
 
         database.sessions_db.insert(model)
-        SessionLogger.log(user_key, f"Created session: {session_id}")
+        logs.sessions_logger.log(user_key, f"Created session: {session_id}")
         return session
     
     @staticmethod
@@ -86,36 +105,36 @@ class Session:
         self.date_renewed = timestamp.generate_timestamp()
         self.date_expire = timestamp.create_session_expiration_datetime(self.date_renewed)
         database.sessions_db.update(self.user_key, {"date_renewed": self.date_renewed})
-        SessionLogger.log(self.user_key, f"Renewed session: {self.session_id}")
+        logs.sessions_logger.log(self.user_key, f"Renewed session: {self.session_id}")
     
     def drop(self) -> None:
         """ Remove this session from database. """
         database.sessions_db.delete(self.user_key)
-        SessionLogger.log(self.user_key, f"Session dropped: {self.session_id}")
+        logs.sessions_logger.log(self.user_key, f"Session dropped: {self.session_id}")
 
 
-def validate_auth_data(db_key: str, session_id: str) -> bool:
+def _validate_auth_data(db_key: str, session_id: str) -> bool:
     """ Check AuthData validity. """
     if db_key is None:
-        SessionLogger.log(session_id, "Cannot validate user session (db_key not provided)")
+        logs.sessions_logger.log(session_id, "Cannot validate user session (db_key not provided)")
         return False
     
     try:
-        account = accounts.Account.get_account_by_key(db_key)
+        account = users.User.get_user_by_key(db_key)
 
     except database.KeyNotFound:
-        SessionLogger.log(session_id, "Cannot validate user session (invalid db_key)")
+        logs.sessions_logger.log(session_id, "Cannot validate user session (invalid db_key)")
         return False
 
     session = account.get_session()
 
     if session.session_id != session_id:
-        SessionLogger.log(session_id, "Cannot validate user session (ids not equal)")
+        logs.sessions_logger.log(session_id, "Cannot validate user session (ids not equal)")
         return False
 
     if session.is_expired():
         session.drop()
-        SessionLogger.log(session.user_key, f"Session: {session_id} was used but is expired.")
+        logs.sessions_logger.log(session.user_key, f"Session: {session_id} was used but is expired.")
         return False
 
     session.renew()
@@ -127,10 +146,10 @@ def validate_client(function):
     async def wrapper(*args, **kwargs):
         data = kwargs.get("data")
         
-        status = validate_auth_data(data.db_key, data.session_id)
+        status = _validate_auth_data(data.db_key, data.session_id)
         if not status:
             return VALIDATION_FAIL_RESPONSE
         
-        await NotificationServer.flush_buffer(data.db_key)
+        # await NotificationServer.flush_buffer(data.db_key)
         return await function(*args, **kwargs)
     return wrapper

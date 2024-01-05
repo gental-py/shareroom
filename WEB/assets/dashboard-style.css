@@ -11,11 +11,18 @@
     padding: 0px;
 }
 
-.rightGroup {
+.middleGroup {
     display: flex;
     flex-direction: column;
     padding: 0px;
     width: 50%;
+}
+
+.rightGroup {
+    display: flex;
+    flex-direction: column;
+    padding: 0px;
+    width: 300px;
 }
 
 .bottomGroup {
@@ -36,6 +43,11 @@
 #createroom-panel {
     width: 50%;
 }
+
+#friends-panel {
+    height: 100%;
+}
+
 
 @media only screen and (max-width: 1420px) {
     .panels {
@@ -68,7 +80,7 @@
         margin-left: 60px;
     }
 
-    .rightGroup {
+    .middleGroup {
         display: flex;
         margin-left: 60px;
         width: 100%;
@@ -99,6 +111,7 @@
     padding: 12px !important;
     margin: 8px;
 }
+
 
 
 /* ROOMS */
@@ -268,6 +281,33 @@
     color: var(--error);
     font-size: small;
     pointer-events: none;
+}
+
+/* FRIENDS */
+
+.friends-container {
+    display: flex;
+    flex-direction: column;
+    outline: #d5b99c38 1px solid;
+    border-radius: 6px;
+    height: 83%;
+}
+
+.friend {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
+}
+
+.friend-name {
+    font-family: 'Cascadia Code';
+    color: var(--main-text);
+    font-size: 16px;
+}
+
+.friend > i {
+    color: var(--secondary);
 }
 
 

@@ -66,7 +66,7 @@
             </div>
         </div>
 
-        <div class="rightGroup">
+        <div class="middleGroup">
             <div class="card" id="activerooms-panel">
                 <h1 class="title"><i class="fa-solid fa-house fa-xs"></i>Active rooms</h1>
                 <div class="active-rooms-container"></div>
@@ -125,6 +125,31 @@
                 </div>
             </div>
         </div>
+
+        <div class="rightGroup" style="display: none;">
+            <div class="card" id="friends-panel">
+                <h1 class="title"><i class="fa-solid fa-heart fa-xs"></i>Friends</h1>
+                <div class="friends-container">
+                    <div class="friend" id="fid">
+                        <h4 class="friend-name">Username</h4>
+                        <i class="fa-solid fa-chevron-right fa-xs"></i>
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="card" id="add-friend-panel">
+                <h1 class="title"><i class="fa-solid fa-plus fa-xs"></i>Add friend</h1>
+                <form>
+                    <div class="inputGroup">
+                        <input id="addfriend-name" type="text" required state="none" oninput="AddFriend.validateUsername()">
+                        <label class="inputLabel">Username</label>
+                    </div>
+                    <div class="container">
+                        <button class="form-submit" onclick="AddFriend.sendRequest(event)">Send request</button>
+                    </div>
+                </form>
+            </div>
     </div>
 
     <script src="assets/script.js"></script>

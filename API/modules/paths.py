@@ -40,9 +40,9 @@ CODE SUMMARY
         - read() -> str
           Returns file's content or blank str if object is a directory.
 """
-from typing import Self
 import shutil
 import stat
+import json
 import os
 
 
@@ -100,7 +100,7 @@ class Path:
         """ Check if path is a directory. """
         return stat.S_ISDIR(os.stat(str(self.path)).st_mode)
 
-    def touch(self) -> Self:
+    def touch(self):
         """ Create directory using os.mkdir or file with open. """
         if self.path.endswith("/"):
             os.mkdir(self.path)
@@ -144,11 +144,13 @@ class Path:
 
     def remove(self) -> None:
         """ Remove this object. """
-        if self.exists():
-            if self.is_dir():
-                shutil.rmtree(self.path)
-            else:
-                os.remove(self.path)
+        if not self.exists():
+            return
+        
+        if self.is_dir():
+            shutil.rmtree(self.path)
+        else:
+            os.remove(self.path)
 
     def get_size(self) -> int:
         """ Returns object size in bytes. (0 if dir) """
@@ -157,6 +159,11 @@ class Path:
         
         return os.path.getsize(str(self.path))
     
+    def write(self, content: str, mode: str = "a") -> None:
+        """ Write contnet to file. """
+        with open(self.path, mode) as file:
+            file.write(content)
+
     def read(self) -> str:
         """ Returns file's content. ("" if dir) """
         if self.is_dir():
@@ -164,3 +171,12 @@ class Path:
         
         with open(self.path, "r") as file:
             return file.read()
+
+    def get_json_content(self) -> dict:
+        """ Return content of a JSON file. """
+        return json.loads(self.read())
+        
+    def save_json_content(self, content: dict | list) -> None:
+        """ Save provided content with JSON encoding. """
+        with open(self.path, "w") as file:
+            json.dump(content, file, indent=2, separators=(',', ': '))

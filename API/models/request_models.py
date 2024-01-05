@@ -51,6 +51,37 @@ class M_AccountData(_Auth, BaseModel):
 class M_AccountLogout(_Auth, BaseModel):
     pass
 
+class M_AllowFriendRequests(_Auth, BaseModel):
+    state: int
+
+class M_SendFriendRequest(_Auth, BaseModel):
+    username: str
+
+class M_AcceptFriendRequest(_Auth, BaseModel):
+    request_id: str
+
+class M_RejectFriendRequest(_Auth, BaseModel):
+    request_id: str
+
+
+# -- DMS --
+    
+class M_LoadDirectMessages(_Auth, BaseModel):
+    target_username: str
+
+class M_SendDirectMessage(_Auth, BaseModel):
+    target_username: str
+    content: str
+
+class M_RemoveDirectMessage(_Auth, BaseModel):
+    target_username: str
+    message_id: str
+
+class M_EditDirectMessage(_Auth, BaseModel):
+    target_username: str
+    message_id: str
+    new_content: str
+
 
 # -- ROOMS --
 

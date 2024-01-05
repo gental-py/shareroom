@@ -344,6 +344,8 @@ function setupNotificationWS() {
         handleNotificationWSMessage(ev.data)
         ev.preventDefault()
     }
+    console.log("Connected to notificationServer")
+
 }
 
 function handleNotificationWSMessage(content) {
@@ -351,7 +353,7 @@ function handleNotificationWSMessage(content) {
     console.log("Received message from NotificationServer: " + content.status)
 
     switch (content.status) {
-        case "notification":
+        case "ROOM_NOTIFICATION":
             setRoomNotificationState(content.room_code, true)
             break
 
@@ -368,59 +370,62 @@ function handleNotificationWSMessage(content) {
 }
 
 function setupRoomWS(room_key) {
-    let ws = new WebSocket(API_URL.replaceAll("http", "ws").replaceAll("https", "ws") + "rooms/ws/" + room_key + "/" + getSavedDbKey())
+    let ws = new WebSocket(API_URL.replaceAll("http", "ws").replaceAll("https", "ws") + "rooms/room_ws/" + room_key)
     ws.onmessage = function (ev) {
         handleRoomWSMessage(ev.data)
         ev.preventDefault()
     }
+    console.log("Connected to room_ws")
 }
 
 function handleRoomWSMessage(content) {
     content = JSON.parse(content.replaceAll("'", '"'))
     console.log("Received message from RoomWS: " + content.status)
 
+    data = content.data
+
     switch (content.status) {
         case "ADD_MSG":
-            author = content.author
-            msg_content = content.content
+            author = data.author
+            msg_content = data.content
             appendMessage(author, msg_content)
             break
 
         case "UPDATE_LOCK_STATE":
-            state = content.state
+            state = data.state
             document.getElementById("room-is-locked").innerHTML = Boolean(state) ? "Yes" : "No"
             document.getElementsByTagName("body")[0].setAttribute("lock-state", Boolean(state) ? "true" : "false")
             break
 
         case "ADD_FILE":
-            author = content.author
-            fileid = content.fileid
-            filename = content.name
-            size = convertBytesToReadableSize(content.size)
+            author = data.author
+            fileid = data.fileid
+            filename = data.name
+            size = convertBytesToReadableSize(data.size)
             appendFile(filename, author, size, fileid)
             break
 
         case "USER_JOIN":
-            username = content.username
+            username = data.username
             appendMember(username)
             showInfo(username + " joined the room")
             break
 
         case "USER_LEFT":
-            username = content.username
+            username = data.username
             removeMember(username)
             showInfo(username + " left the room")
             break
 
         case "RM_ROOM":
-            code = content.room_code
+            code = data.room_code
             console.warn("Received RM_ROOM for room: " + code)
             redirectToDashboard()
             removeActiveRoom(code)
             break
 
         case "KICK_MEMBER":
-            username = content.username
+            username = data.username
             showWarning(username + " has just been kicked.")
             removeMember(username)
 
@@ -431,11 +436,12 @@ function handleRoomWSMessage(content) {
             break
 
         case "RM_FILE":
-            fileid = content.fileid
+            fileid = data.fileid
             removeFile(fileid)
             break
-            
     }
+
+    console.log("| status: " + content.status)
 }
 
 function loadUserData() {
@@ -549,7 +555,6 @@ function loadRoomData(room_key) {
                     document.getElementById("room-code").innerHTML = ROOM_CODE
                     document.getElementById("room-creator").innerHTML = data.creator
                     document.getElementById("room-created-at").innerHTML = data.date_created
-                    document.getElementById("room-remove-at").innerHTML = data.date_remove
                     document.getElementById("room-is-pwd").innerHTML = data.is_password? "Yes" : "No"
                     document.getElementById("room-is-locked").innerHTML = data.is_locked? "Yes" : "No"
 
@@ -965,7 +970,7 @@ const JoinRoomForm = {
         let password = document.getElementById("joinroom-pwd").value
 
         if (isRoomActive(code)) {
-            alert("Room already active")
+            showWarning("You are already member of this room.")
             return false
         }
 
@@ -1102,6 +1107,58 @@ const LogoutForm = {
         return false
     }
 }
+
+// const AddFriend = {
+//     validateUsername() {
+//         const element = document.getElementById("addfriend-name")
+//         return validateName(element)
+//     },
+
+//     sendRequest(e) {
+//         e.preventDefault()
+//         if (!this.validateUsername()) {
+//             return
+//         }
+
+//         let username = document.getElementById("addfriend-name").value
+
+//         let data = {
+//             username: username,
+//         };
+
+//         data = Object.assign(grabAuthData(), data)
+
+//         const options = {
+//             method: 'POST',
+//             headers: {
+//                 'Content-Type': 'application/json'
+//             },
+//             body: JSON.stringify(data)
+//         };
+
+//         fetch(API_URL + "accounts/sendFriendRequest", options)
+//             .then(response => response.json())
+//             .then(result => {
+//                 console.log('Received response from SENDFRIENDREQUEST request')
+
+//                 switch (result.status) {
+//                     case true:
+//                         showSuccess("Sent friend request to: " + username)
+//                         break
+
+//                     case false:
+//                         handleApiError(result)
+//                         break
+//                 }
+
+//             })
+//             .catch(error => {
+//                 console.error('Error while sending SENDFRIENDREQUEST request', error);
+//             });
+
+//     }    
+
+// }
 
 
 // - roomview.html

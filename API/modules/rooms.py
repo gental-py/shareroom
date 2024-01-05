@@ -5,12 +5,14 @@ MODULE
 DESCRIPTION
     Contains room management tools.
 """
-from modules.logs import RoomsLogger, SysLogger
+from models.db_models import RoomModel
+
 from modules.database import SET_AFTER_INIT
 from modules.paths import Path
 from modules import timestamp
 from modules import database
-from modules import accounts
+from modules import users
+from modules import logs
 
 from fastapi.responses import JSONResponse
 from dataclasses import dataclass
@@ -23,7 +25,7 @@ import json
 import os
 
 
-ROOMS_DATA_PATH = Path("./rooms_data/")
+ROOMS_DATA_PATH = Path("./data/rooms/")
 MAX_ROOM_DATA_SIZE = 1073741824 // 10  # tenth of GB per room
 TOTAL_DATA_SIZE = 1073741824  # one GB
 MAX_USERS_PER_ROOM = 5
@@ -55,7 +57,7 @@ def get_total_space_left() -> int:
                 size += os.path.getsize(file_path)
 
     space_left = TOTAL_DATA_SIZE - rooms_size
-    SysLogger.info(f"Calculated total space left: {space_left}b")
+    logs.rooms_logger.log("(space calculator)" ,f"Calculated total space left: {space_left}b")
     return space_left
 
 
@@ -72,7 +74,7 @@ class RoomDataManager:
                     file_id = create_file_id(user_dir.get_name(), file)
                     file_path = user_dir / file
                     RoomDataManager.ids_register[file_id] = file_path
-                    RoomsLogger.log("(id rebuilder)", f"Saved id: {file_id} for: {str(file_path)}")
+                    logs.rooms_logger.log("(id rebuilder)", f"Saved id: {file_id} for: {str(file_path)}")
 
     @staticmethod
     def get_file_path(file_id: str) -> Path | bool:
@@ -85,14 +87,14 @@ class RoomDataManager:
         self.room_path = ROOMS_DATA_PATH // self.room_key
         if not self.room_path.exists():
             self.room_path.touch()
-            RoomsLogger.log(self.room_key, "Created room data directory.")
+            logs.rooms_logger.log(self.room_key, "Created room data directory.")
         
         self.msg_path = self.room_path / "messages.json"
         if not self.msg_path.exists():
             self.msg_path.touch()
             with open(str(self.msg_path), "w") as file:
                 json.dump([], file)            
-            RoomsLogger.log(self.room_key, "Created messages file")
+            logs.rooms_logger.log(self.room_key, "Created messages file")
 
     def __get_msg_content(self) -> List[dict]:
         """ Returns content of messages.json file. """
@@ -119,35 +121,35 @@ class RoomDataManager:
     def add_user_dir(self, user_key: str) -> None:
         """ Create user directory. """
         (self.room_path // user_key).touch()
-        RoomsLogger.log(self.room_key, f"Created user data directory for: {user_key}")
+        logs.rooms_logger.log(self.room_key, f"Created user data directory for: {user_key}")
 
     def remove_user_dir(self, user_key: str) -> None:
         """ Remove user directory. """
         path = self.room_path // user_key
         if path.exists():
             path.remove()
-            RoomsLogger.log(self.room_key, f"Removed user dir: {user_key}")
+            logs.rooms_logger.log(self.room_key, f"Removed user dir: {user_key}")
         else:
-            RoomsLogger.log(self.room_key, f"WARN: Cannot remove user dir (not exists) for: {user_key}")
+            logs.rooms_logger.log(self.room_key, f"WARN: Cannot remove user dir (not exists) for: {user_key}")
 
     def upload_file(self, user_key: str, uploaded_file: UploadFile) -> tuple[str, str] | bool:
         """ Upload file to user's directory if there is enough space. Returns upload status. """
         if uploaded_file.size is None:
             uploaded_file.size = len(uploaded_file.file.read())
         if (self.calculate_total_space() + uploaded_file.size) > MAX_ROOM_DATA_SIZE:
-            RoomsLogger.log(self.room_key, "Cannot upload file (room size limit reached.)")
+            logs.rooms_logger.log(self.room_key, "Cannot upload file (room size limit reached.)")
             return False
         if ((TOTAL_DATA_SIZE - get_total_space_left()) + uploaded_file.size) > TOTAL_DATA_SIZE:
-            RoomsLogger.log(self.room_key, "Cannot upload file (data size limit reached.)")
+            logs.rooms_logger.log(self.room_key, "Cannot upload file (total data size limit reached.)")
             return False
         
         if not self.user_dir_exists(user_key):
-            RoomsLogger.log(self.room_key, f"User's room does not exists: {user_key} (creating...)")
+            logs.rooms_logger.log(self.room_key, f"User's room does not exists: {user_key} (creating...)")
             self.add_user_dir(user_key)
 
         user_path = self.room_path // user_key
         if uploaded_file.filename in user_path.list_dir(as_str=True):
-            RoomsLogger.log(self.room_key, f"Renaming uploaded file as same was found: {uploaded_file.filename}")
+            logs.rooms_logger.log(self.room_key, f"Renaming uploaded file as same was found: {uploaded_file.filename}")
             suffix = str(timestamp.generate_timestamp())[-4:]
             name, ext = os.path.splitext(uploaded_file.filename)
             uploaded_file.filename = name + suffix + ext
@@ -161,18 +163,19 @@ class RoomDataManager:
 
         file_id = create_file_id(user_key, uploaded_file.filename)
         RoomDataManager.ids_register[file_id] = file_path
-        RoomsLogger.log(self.room_key, f"Uploaded file to user directory: {uploaded_file.filename} (id: {file_id})")
+        logs.rooms_logger.log(self.room_key, f"Uploaded file to user directory: {uploaded_file.filename} (id: {file_id})")
         return file_id, uploaded_file.filename
 
     def remove_file(self, file_id: str) -> bool:
         """ Remove file with provided id. Returns if file was removed. """
         path = RoomDataManager.ids_register.get(file_id, False)
         if not path:
-            RoomsLogger.log(self.room_key, f"Tried to remove file id: {file_id} (id not found in register)")
+            logs.rooms_logger.log(self.room_key, f"Tried to remove file id: {file_id} (id not found in register)")
             return False
         
         path.remove()
-        RoomsLogger.log(self.room_key, f"Removed file: {str(path)} ({file_id})")
+        RoomDataManager.ids_register.pop(file_id)
+        logs.rooms_logger.log(self.room_key, f"Removed file: {str(path)} ({file_id})")
         return True
 
     def get_all_files_data(self) -> dict:
@@ -186,10 +189,10 @@ class RoomDataManager:
                 user_key = user_dir.get_name()
 
                 try:
-                    username = accounts.Account.get_account_by_key(user_key).username
+                    username = users.User.get_user_by_key(user_key).username
 
                 except database.KeyNotFound:
-                    RoomsLogger.log(self.room_key, f"Invalid user key found: {user_key}")
+                    logs.rooms_logger.log(self.room_key, f"Invalid user key found: {user_key}")
                     username = "?"
 
                 data[file_id] = {"name": file.get_name(), "author": username, "size": size}
@@ -223,7 +226,6 @@ class Room:
     is_locked: bool = False
 
     # Automatically set after initialization
-    date_remove: int = SET_AFTER_INIT
     code: str = SET_AFTER_INIT
     db_key: str = SET_AFTER_INIT
     room_data_manager: RoomDataManager = SET_AFTER_INIT
@@ -237,15 +239,15 @@ class Room:
         Save room to rooms database. 
         """
         if not is_name_available(name):
-            RoomsLogger.log(f"Cannot create room (name in use): {name}")
+            logs.rooms_logger.log(name, f"Cannot create room (name in use): {name}")
             return False
         
         if admin_key not in database.users_db.get_all_keys():
-            RoomsLogger.log(f"Cannot create room (admin_key not found in users_db): {admin_key}")
+            logs.rooms_logger.log(name, f"Cannot create room (admin_key not found in users_db): {admin_key}")
             return False
 
         if max_users not in range(1, MAX_USERS_PER_ROOM+1):
-            RoomsLogger.log(f"Invalid max_users value detected: {max_users}, settings to: {MAX_USERS_PER_ROOM}")
+            logs.rooms_logger.log(name, f"Invalid max_users value detected: {max_users}, settings to: {MAX_USERS_PER_ROOM}")
             max_users = MAX_USERS_PER_ROOM
 
         if isinstance(password, bytes):
@@ -264,7 +266,7 @@ class Room:
             members=[admin_key]
         )
 
-        model = database.RoomModel(
+        model = RoomModel(
             name=name,
             admin=admin_key,
             date_created=date_created,
@@ -276,11 +278,11 @@ class Room:
 
         db_key = database.rooms_db.insert(model)
         room.db_key = db_key
-        RoomsLogger.log(room.db_key, f"Created room: {repr(room)}")
+        logs.rooms_logger.log(room.db_key, f"Created room: {repr(room)}")
         return room
     
     @staticmethod
-    def from_model(model: database.RoomModel) -> "Room":
+    def from_model(model: RoomModel) -> "Room":
         """ Build instance of Room object from it's database's model. """
         return Room(
             name=model.name,
@@ -318,7 +320,6 @@ class Room:
         return Room.from_model(model)
 
     def __post_init__(self):
-        self.date_remove = timestamp.create_room_remove_timestamp(self.date_created)
         self.db_key = hashlib.sha1(self.name.encode()).hexdigest()
         self.code = self.db_key[:CODE_LENGTH]
         self.room_data_manager = RoomDataManager(self.db_key)
@@ -332,8 +333,8 @@ class Room:
         return free_slots
 
     def is_expired(self) -> bool:
-        """ Check if date_removed has passed. """
-        return timestamp.Datetime.now() > timestamp.read_timestamp(self.date_remove)
+        """ Check if room was inactive for a long time. """
+        return timestamp.is_room_expired(self.last_interaction)
 
     def check_password(self, provided_password: str) -> bool:
         """ 
@@ -348,35 +349,35 @@ class Room:
         """ Remove this room from database. Cleanup data. """
         database.rooms_db.delete(self.db_key)
         self.room_data_manager.cleanup()
-        RoomsLogger.log(self.db_key, f"Removed room: {repr(self)}")
+        logs.rooms_logger.log(self.db_key, f"Removed room: {repr(self)}")
 
     def add_member_key(self, member_key: str) -> None:
         """ Add new member to the room. """
         self.members.append(member_key)
         database.rooms_db.update(self.db_key, {"members": (member_key)}, iter_append=True)
-        RoomsLogger.log(self.db_key, f"Added member: {member_key}")
+        logs.rooms_logger.log(self.db_key, f"Added member: {member_key}")
 
     def remove_member_key(self, member_key: str) -> None:
         """ Remove member from the room. Remove it's files. """
         if member_key not in self.members:
-            RoomsLogger.log(self.db_key, f"Cannot remove member: {member_key} (not found)")
+            logs.rooms_logger.log(self.db_key, f"Cannot remove member: {member_key} (not found)")
             return
-        
+            
         database.rooms_db.update(self.db_key, {"members": (member_key)}, iter_pop=True)
         self.members.remove(member_key)
         self.room_data_manager.remove_user_dir(member_key)
-        RoomsLogger.log(self.db_key, f"Removed member: {member_key}")
+        logs.rooms_logger.log(self.db_key, f"Removed member: {member_key}")
 
     def has_member(self, user_key: str) -> bool:
         return user_key in self.members or user_key == self.admin_key
 
-    def get_admin_account(self) -> accounts.Account:
-        """ Return admin's accounts.Account object. """
-        return accounts.Account.get_account_by_key(self.admin_key)
+    def get_admin_account(self) -> users.User:
+        """ Return admin's users.User() object. """
+        return users.User.get_user_by_key(self.admin_key)
     
-    def get_members_accounts(self) -> List[accounts.Account]:
-        """ Return all members' account objects. """
-        return [accounts.Account.get_account_by_key(key) for key in self.members]
+    def get_members_accounts(self) -> List[users.User]:
+        """ Return all members' User objects. """
+        return [users.User.get_user_by_key(key) for key in self.members]
 
     def upload_file(self, member_key: str, file: UploadFile) -> tuple[str, str] | bool:
         """ Upload file to server, return status. """
@@ -386,14 +387,14 @@ class Room:
         """ Update room's lock state. """
         self.is_locked = state
         database.rooms_db.update(self.db_key, {"is_locked": state})
-        RoomsLogger.log(self.db_key, f"Updated room's lock state to: {state}")
+        logs.rooms_logger.log(self.db_key, f"Updated room's lock state to: {state}")
 
     def update_interaction_date(self) -> None:
         """ Update last_interaction field to current date. """
         current_timestamp = timestamp.generate_timestamp()
         self.last_interaction = current_timestamp
         database.rooms_db.update(self.db_key, {"last_interaction": self.last_interaction})
-        RoomsLogger.log(self.db_key, "Updated last_interaction field.")
+        logs.rooms_logger.log(self.db_key, "Updated last_interaction field.")
 
 
 def validate_room(function):
@@ -423,7 +424,7 @@ def validate_room(function):
                 return ROOM_VALIDATION_FAIL_RESPONSE
             
         if room and room.is_expired():
-            RoomsLogger.log(room.db_key, "Room has expired")
+            logs.rooms_logger.log(room.db_key, "Room has expired")
             room.remove_room()
             return ROOM_VALIDATION_FAIL_RESPONSE
         

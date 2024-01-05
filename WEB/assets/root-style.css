@@ -287,3 +287,7 @@ input[type=range]::-moz-range-thumb {
     appearance: none;
     margin-top: -2px;
 }
+
+i {
+    color: var(--main-text);
+}
